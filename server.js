@@ -1,15 +1,26 @@
-require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
+const dotenv = require("dotenv");
+
 const connectDB = require("./config/db");
 
 const userRoutes = require("./routes/userRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
+const authRoutes = require("./routes/authRoutes");
+
+dotenv.config();
 
 const app = express();
 
-const PORT = 5000;
+// =========================
+// DATABASE
+// =========================
+
+connectDB();
+
+// =========================
+// MIDDLEWARE
+// =========================
 
 app.use(
   cors({
@@ -20,17 +31,59 @@ app.use(
 
 app.use(express.json());
 
-connectDB();
+app.use(express.urlencoded({ extended: true }));
+
+// =========================
+// TEST ROUTE
+// =========================
 
 app.get("/", (req, res) => {
-  res.send("Ledger Backend Server is running 🚀");
+  res.json({
+    success: true,
+    message: "Ledger System API is running",
+  });
 });
 
-// User & Roles API
+// =========================
+// API ROUTES
+// =========================
+
 app.use("/api/users", userRoutes);
 
-// Settings API
 app.use("/api/settings", settingsRoutes);
+
+app.use("/api/auth", authRoutes);
+
+// =========================
+// 404 HANDLER
+// =========================
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+
+// =========================
+// ERROR HANDLER
+// =========================
+
+app.use((err, req, res, next) => {
+  console.error("Server error:", err);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    error: err.message,
+  });
+});
+
+// =========================
+// SERVER
+// =========================
+
+const PORT = process.env.PORT ;
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

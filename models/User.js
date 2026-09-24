@@ -12,20 +12,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      trim: true,
       lowercase: true,
-    },
-
-    phone: {
-      type: String,
-      required: true,
       trim: true,
     },
 
-    address: {
+    password: {
       type: String,
       required: true,
-      trim: true,
     },
 
     role: {
@@ -34,9 +27,16 @@ const userSchema = new mongoose.Schema(
       default: "Cashier",
     },
 
-    joined: {
-      type: Date,
-      default: Date.now,
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    address: {
+      type: String,
+      default: "",
+      trim: true,
     },
   },
   {
