@@ -10,6 +10,7 @@ const authRoutes = require("./routes/authRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const supplierRoutes = require("./routes/supplierRoutes");
 const productRoutes = require("./routes/productRoutes");
+const areaRoutes = require("./routes/areaRoutes");
 
 dotenv.config();
 
@@ -27,7 +28,7 @@ connectDB();
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "https://ledger-system-beige.vercel.app"],
     credentials: true,
   })
 );
@@ -55,6 +56,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/areas", areaRoutes);
 
 app.use("/api/settings", settingsRoutes);
 
