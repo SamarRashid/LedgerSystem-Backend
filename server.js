@@ -11,6 +11,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const supplierRoutes = require("./routes/supplierRoutes");
 const productRoutes = require("./routes/productRoutes");
 const areaRoutes = require("./routes/areaRoutes");
+const billRoutes = require("./routes/billRoutes");
 
 dotenv.config();
 
@@ -57,6 +58,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/areas", areaRoutes);
+app.use("/api/bills", billRoutes);
 
 app.use("/api/settings", settingsRoutes);
 
