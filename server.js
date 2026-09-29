@@ -30,7 +30,10 @@ connectDB();
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://ledger-system-beige.vercel.app"],
+    origin: ["http://localhost:3000",
+             "https://ledger-system-beige.vercel.app",
+             "https://ledgersystem-backend.onrender.com"
+            ],
     credentials: true,
   })
 );
