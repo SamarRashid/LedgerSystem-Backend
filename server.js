@@ -13,6 +13,8 @@ const productRoutes = require("./routes/productRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const billRoutes = require("./routes/billRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
+const receiptRoutes = require("./routes/receiptRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 dotenv.config();
 
@@ -31,9 +33,8 @@ connectDB();
 app.use(
   cors({
     origin: ["http://localhost:3000",
-             "https://ledger-system-beige.vercel.app",
-             "https://ledgersystem-backend.onrender.com"
-            ],
+             "https://ledger-system-beige.vercel.app"
+          ],
     credentials: true,
   })
 );
@@ -64,6 +65,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/bills", billRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/receipts", receiptRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.use("/api/settings", settingsRoutes);
 
