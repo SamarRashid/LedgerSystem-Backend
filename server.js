@@ -15,6 +15,7 @@ const billRoutes = require("./routes/billRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const receiptRoutes = require("./routes/receiptRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const commissionRoutes = require("./routes/commissionRoutes");
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ app.use("/api/bills", billRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/receipts", receiptRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/commissions", commissionRoutes);
 
 app.use("/api/settings", settingsRoutes);
 
