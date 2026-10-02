@@ -15,6 +15,7 @@ const billRoutes = require("./routes/billRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const receiptRoutes = require("./routes/receiptRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const customerLedgerRoutes =require("./routes/customerLedgerRoutes");
 
 dotenv.config();
 
@@ -67,10 +68,14 @@ app.use("/api/bills", billRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/receipts", receiptRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/customerledgers", customerLedgerRoutes );
 
 app.use("/api/settings", settingsRoutes);
 
 app.use("/api/auth", authRoutes);
+
+
+
 
 // =========================
 // 404 HANDLER

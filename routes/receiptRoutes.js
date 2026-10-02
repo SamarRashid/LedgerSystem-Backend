@@ -1,7 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const { createReceipt, getReceipts } = require('../controllers/receiptController');
+const express = require("express");
 
-router.route('/').post(createReceipt).get(getReceipts);
+const router = express.Router();
+
+const {
+  createReceipt,
+  getAllReceipts,
+  getCustomerLedger,
+} = require("../controllers/receiptController");
+
+// GET all receipts
+router.get("/", getAllReceipts);
+
+// CREATE receipt
+router.post("/", createReceipt);
+
+// GET customer ledger
+router.get("/customer/:customerId", getCustomerLedger);
 
 module.exports = router;
