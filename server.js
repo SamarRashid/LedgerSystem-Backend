@@ -15,11 +15,8 @@ const billRoutes = require("./routes/billRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const receiptRoutes = require("./routes/receiptRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-<<<<<<< HEAD
 const customerLedgerRoutes =require("./routes/customerLedgerRoutes");
-=======
 const commissionRoutes = require("./routes/commissionRoutes");
->>>>>>> 8c4a6a9c90b16987fe5aded1057d5f28dd1c2b4a
 
 dotenv.config();
 
@@ -72,11 +69,8 @@ app.use("/api/bills", billRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/receipts", receiptRoutes);
 app.use("/api/payments", paymentRoutes);
-<<<<<<< HEAD
 app.use("/api/customerledgers", customerLedgerRoutes );
-=======
 app.use("/api/commissions", commissionRoutes);
->>>>>>> 8c4a6a9c90b16987fe5aded1057d5f28dd1c2b4a
 
 app.use("/api/settings", settingsRoutes);
 
