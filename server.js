@@ -1,8 +1,23 @@
+// =========================================================
+// ENVIRONMENT VARIABLES
+// =========================================================
+
+require("dotenv").config();
+
+
+// =========================================================
+// IMPORTS
+// =========================================================
+
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
 
-const connectDB = require("./config/db");
+const { connectDB } = require("./config/db");
+
+
+// =========================================================
+// ROUTES
+// =========================================================
 
 const userRoutes = require("./routes/userRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
@@ -15,28 +30,34 @@ const billRoutes = require("./routes/billRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const receiptRoutes = require("./routes/receiptRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-const customerLedgerRoutes =require("./routes/customerLedgerRoutes");
+const customerLedgerRoutes = require("./routes/customerLedgerRoutes");
 const commissionRoutes = require("./routes/commissionRoutes");
 
-dotenv.config();
+
+// =========================================================
+// APP
+// =========================================================
 
 const app = express();
 
-// =========================
+
+// =========================================================
 // DATABASE
-// =========================
+// =========================================================
 
 connectDB();
 
-// =========================
+
+// =========================================================
 // MIDDLEWARE
-// =========================
+// =========================================================
 
 app.use(
   cors({
-    origin: ["http://localhost:3000",
-             "https://ledger-system-beige.vercel.app"
-          ],
+    origin: [
+      "http://localhost:3000",
+      "https://ledger-system-beige.vercel.app",
+    ],
     credentials: true,
   })
 );
@@ -45,9 +66,10 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-// =========================
+
+// =========================================================
 // TEST ROUTE
-// =========================
+// =========================================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -56,20 +78,31 @@ app.get("/", (req, res) => {
   });
 });
 
-// =========================
+
+// =========================================================
 // API ROUTES
-// =========================
+// =========================================================
 
 app.use("/api/users", userRoutes);
+
 app.use("/api/customers", customerRoutes);
+
 app.use("/api/suppliers", supplierRoutes);
+
 app.use("/api/products", productRoutes);
+
 app.use("/api/areas", areaRoutes);
+
 app.use("/api/bills", billRoutes);
+
 app.use("/api/expenses", expenseRoutes);
+
 app.use("/api/receipts", receiptRoutes);
+
 app.use("/api/payments", paymentRoutes);
-app.use("/api/customerledgers", customerLedgerRoutes );
+
+app.use("/api/customerledgers", customerLedgerRoutes);
+
 app.use("/api/commissions", commissionRoutes);
 
 app.use("/api/settings", settingsRoutes);
@@ -77,11 +110,9 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/auth", authRoutes);
 
 
-
-
-// =========================
+// =========================================================
 // 404 HANDLER
-// =========================
+// =========================================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -90,9 +121,10 @@ app.use((req, res) => {
   });
 });
 
-// =========================
+
+// =========================================================
 // ERROR HANDLER
-// =========================
+// =========================================================
 
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
@@ -104,11 +136,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// =========================
-// SERVER
-// =========================
 
-const PORT = process.env.PORT ;
+// =========================================================
+// SERVER
+// =========================================================
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

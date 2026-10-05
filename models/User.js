@@ -1,47 +1,29 @@
-const mongoose = require("mongoose");
+const express = require("express");
 
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+const {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+} = require("../controllers/userController");
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
+const router = express.Router();
 
-    password: {
-      type: String,
-      required: true,
-    },
 
-    role: {
-      type: String,
-      enum: ["Super Admin", "Admin", "Cashier"],
-      default: "Cashier",
-    },
+// GET ALL USERS
+router.get("/", getUsers);
 
-    phone: {
-      type: String,
-      default: "",
-      trim: true,
-    },
 
-    address: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+// CREATE USER
+router.post("/", createUser);
 
-module.exports = mongoose.model("User", userSchema);
+
+// UPDATE USER
+router.put("/:id", updateUser);
+
+
+// DELETE USER
+router.delete("/:id", deleteUser);
+
+
+module.exports = router;
