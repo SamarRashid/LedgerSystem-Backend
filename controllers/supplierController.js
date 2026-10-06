@@ -1,14 +1,22 @@
 const { supabase } = require("../config/db");
 
+// Helper: Format supplier response
+const formatSupplier = (s) => ({
+  id: s.id,
+  code: s.code,
+  nameEnglish: s.nameEnglish,
+  nameUrdu: s.nameUrdu,
+  phone: s.phone || "",
+  address: s.address || "",
+  openingBalance: Number(s.openingBalance || 0),
+  status: s.status || "Active",
+});
 
-// =========================================================
 // GET ALL SUPPLIERS
 // GET /api/suppliers
-// =========================================================
-
 const getSuppliers = async (req, res) => {
   try {
-    const { data: suppliers, error } = await supabase
+    const { data, error } = await supabase
       .from("suppliers")
       .select(`
         id,
@@ -24,32 +32,12 @@ const getSuppliers = async (req, res) => {
       `)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Get suppliers error:", error);
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to fetch suppliers",
-        error: error.message,
-      });
-    }
-
-    const formattedSuppliers = (suppliers || []).map((s) => ({
-      id: s.id,
-      code: s.code,
-      nameEnglish: s.nameEnglish,
-      nameUrdu: s.nameUrdu,
-      phone: s.phone || "",
-      address: s.address || "",
-      openingBalance: Number(s.openingBalance || 0),
-      status: s.status || "Active",
-    }));
+    if (error) throw error;
 
     return res.status(200).json({
       success: true,
-      data: formattedSuppliers,
+      data: (data || []).map(formatSupplier),
     });
-
   } catch (error) {
     console.error("Get suppliers error:", error);
 
@@ -61,12 +49,8 @@ const getSuppliers = async (req, res) => {
   }
 };
 
-
-// =========================================================
 // CREATE SUPPLIER
 // POST /api/suppliers
-// =========================================================
-
 const createSupplier = async (req, res) => {
   try {
     const {
@@ -79,8 +63,14 @@ const createSupplier = async (req, res) => {
       status,
     } = req.body;
 
-    // Validation
-    if (!code || !nameEnglish || !nameUrdu) {
+    if (
+      typeof code !== "string" ||
+      !code.trim() ||
+      typeof nameEnglish !== "string" ||
+      !nameEnglish.trim() ||
+      typeof nameUrdu !== "string" ||
+      !nameUrdu.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Code, English name and Urdu name are required",
@@ -89,50 +79,44 @@ const createSupplier = async (req, res) => {
 
     const cleanCode = code.trim();
 
-    // Check duplicate code
-    const {
-      data: existingSupplier,
-      error: checkError,
-    } = await supabase
+    const balance =
+      openingBalance === undefined || openingBalance === ""
+        ? 0
+        : Number(openingBalance);
+
+    if (!Number.isFinite(balance)) {
+      return res.status(400).json({
+        success: false,
+        message: "Opening balance must be a valid number",
+      });
+    }
+
+    const { data: existing, error: checkError } = await supabase
       .from("suppliers")
       .select("id")
       .eq("code", cleanCode)
       .maybeSingle();
 
-    if (checkError) {
-      console.error("Check supplier error:", checkError);
+    if (checkError) throw checkError;
 
-      return res.status(500).json({
-        success: false,
-        message: "Failed to check supplier code",
-        error: checkError.message,
-      });
-    }
-
-    if (existingSupplier) {
-      return res.status(400).json({
+    if (existing) {
+      return res.status(409).json({
         success: false,
         message: "Supplier code already exists",
       });
     }
 
-    // Create supplier
-    const {
-      data: supplier,
-      error: createError,
-    } = await supabase
+    const { data: supplier, error } = await supabase
       .from("suppliers")
-      .insert([
-        {
-          code: cleanCode,
-          nameEnglish: nameEnglish.trim(),
-          nameUrdu: nameUrdu.trim(),
-          phone: phone || "",
-          address: address || "",
-          openingBalance: Number(openingBalance || 0),
-          status: status || "Active",
-        },
-      ])
+      .insert({
+        code: cleanCode,
+        nameEnglish: nameEnglish.trim(),
+        nameUrdu: nameUrdu.trim(),
+        phone: phone || "",
+        address: address || "",
+        openingBalance: balance,
+        status: status || "Active",
+      })
       .select(`
         id,
         code,
@@ -142,36 +126,18 @@ const createSupplier = async (req, res) => {
         address,
         openingBalance,
         status,
-        created_at
+        created_at,
+        updated_at
       `)
       .single();
 
-    if (createError) {
-      console.error("Create supplier error:", createError);
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create supplier",
-        error: createError.message,
-      });
-    }
+    if (error) throw error;
 
     return res.status(201).json({
       success: true,
       message: "Supplier created successfully",
-
-      data: {
-        id: supplier.id,
-        code: supplier.code,
-        nameEnglish: supplier.nameEnglish,
-        nameUrdu: supplier.nameUrdu,
-        phone: supplier.phone || "",
-        address: supplier.address || "",
-        openingBalance: Number(supplier.openingBalance || 0),
-        status: supplier.status,
-      },
+      data: formatSupplier(supplier),
     });
-
   } catch (error) {
     console.error("Create supplier error:", error);
 
@@ -183,12 +149,8 @@ const createSupplier = async (req, res) => {
   }
 };
 
-
-// =========================================================
 // UPDATE SUPPLIER
 // PUT /api/suppliers/:id
-// =========================================================
-
 const updateSupplier = async (req, res) => {
   try {
     const { id } = req.params;
@@ -203,105 +165,99 @@ const updateSupplier = async (req, res) => {
       status,
     } = req.body;
 
-    // Check supplier
-    const {
-      data: existingSupplier,
-      error: findError,
-    } = await supabase
+    const { data: existing, error: findError } = await supabase
       .from("suppliers")
       .select("*")
       .eq("id", id)
       .maybeSingle();
 
-    if (findError) {
-      console.error("Find supplier error:", findError);
+    if (findError) throw findError;
 
-      return res.status(500).json({
-        success: false,
-        message: "Failed to find supplier",
-        error: findError.message,
-      });
-    }
-
-    if (!existingSupplier) {
+    if (!existing) {
       return res.status(404).json({
         success: false,
         message: "Supplier not found",
       });
     }
 
-    // Prepare update
     const updateData = {};
 
     if (code !== undefined) {
+      if (typeof code !== "string" || !code.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Supplier code cannot be empty",
+        });
+      }
+
       updateData.code = code.trim();
     }
 
     if (nameEnglish !== undefined) {
+      if (typeof nameEnglish !== "string" || !nameEnglish.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "English name cannot be empty",
+        });
+      }
+
       updateData.nameEnglish = nameEnglish.trim();
     }
 
     if (nameUrdu !== undefined) {
+      if (typeof nameUrdu !== "string" || !nameUrdu.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Urdu name cannot be empty",
+        });
+      }
+
       updateData.nameUrdu = nameUrdu.trim();
     }
 
-    if (phone !== undefined) {
-      updateData.phone = phone;
-    }
-
-    if (address !== undefined) {
-      updateData.address = address;
-    }
+    if (phone !== undefined) updateData.phone = phone || "";
+    if (address !== undefined) updateData.address = address || "";
+    if (status !== undefined) updateData.status = status;
 
     if (openingBalance !== undefined) {
-      updateData.openingBalance = Number(openingBalance);
+      const balance = Number(openingBalance);
+
+      if (!Number.isFinite(balance)) {
+        return res.status(400).json({
+          success: false,
+          message: "Opening balance must be a valid number",
+        });
+      }
+
+      updateData.openingBalance = balance;
     }
 
-    if (status !== undefined) {
-      updateData.status = status;
-    }
-
-    // Check duplicate code if code changed
-    if (
-      updateData.code &&
-      updateData.code !== existingSupplier.code
-    ) {
-      const {
-        data: duplicateSupplier,
-        error: duplicateError,
-      } = await supabase
+    if (updateData.code && updateData.code !== existing.code) {
+      const { data: duplicate, error: duplicateError } = await supabase
         .from("suppliers")
         .select("id")
         .eq("code", updateData.code)
         .neq("id", id)
         .maybeSingle();
 
-      if (duplicateError) {
-        console.error(
-          "Duplicate supplier code error:",
-          duplicateError
-        );
+      if (duplicateError) throw duplicateError;
 
-        return res.status(500).json({
-          success: false,
-          message: "Failed to check supplier code",
-          error: duplicateError.message,
-        });
-      }
-
-      if (duplicateSupplier) {
-        return res.status(400).json({
+      if (duplicate) {
+        return res.status(409).json({
           success: false,
           message: "Supplier code already exists",
         });
       }
     }
 
-    // Update
-    const {
-      data: updatedSupplier,
-      error: updateError,
-    } = await supabase
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields provided for update",
+      });
+    }
+
+    const { data: updated, error: updateError } = await supabase
       .from("suppliers")
       .update(updateData)
       .eq("id", id)
@@ -319,34 +275,13 @@ const updateSupplier = async (req, res) => {
       `)
       .single();
 
-    if (updateError) {
-      console.error("Update supplier error:", updateError);
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to update supplier",
-        error: updateError.message,
-      });
-    }
+    if (updateError) throw updateError;
 
     return res.status(200).json({
       success: true,
       message: "Supplier updated successfully",
-
-      data: {
-        id: updatedSupplier.id,
-        code: updatedSupplier.code,
-        nameEnglish: updatedSupplier.nameEnglish,
-        nameUrdu: updatedSupplier.nameUrdu,
-        phone: updatedSupplier.phone || "",
-        address: updatedSupplier.address || "",
-        openingBalance: Number(
-          updatedSupplier.openingBalance || 0
-        ),
-        status: updatedSupplier.status,
-      },
+      data: formatSupplier(updated),
     });
-
   } catch (error) {
     console.error("Update supplier error:", error);
 
@@ -358,35 +293,19 @@ const updateSupplier = async (req, res) => {
   }
 };
 
-
-// =========================================================
 // DELETE SUPPLIER
 // DELETE /api/suppliers/:id
-// =========================================================
-
 const deleteSupplier = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check supplier
-    const {
-      data: supplier,
-      error: findError,
-    } = await supabase
+    const { data: supplier, error: findError } = await supabase
       .from("suppliers")
       .select("id")
       .eq("id", id)
       .maybeSingle();
 
-    if (findError) {
-      console.error("Find supplier error:", findError);
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to find supplier",
-        error: findError.message,
-      });
-    }
+    if (findError) throw findError;
 
     if (!supplier) {
       return res.status(404).json({
@@ -395,27 +314,17 @@ const deleteSupplier = async (req, res) => {
       });
     }
 
-    // Delete supplier
     const { error: deleteError } = await supabase
       .from("suppliers")
       .delete()
       .eq("id", id);
 
-    if (deleteError) {
-      console.error("Delete supplier error:", deleteError);
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to delete supplier",
-        error: deleteError.message,
-      });
-    }
+    if (deleteError) throw deleteError;
 
     return res.status(200).json({
       success: true,
       message: "Supplier removed successfully",
     });
-
   } catch (error) {
     console.error("Delete supplier error:", error);
 
@@ -426,11 +335,6 @@ const deleteSupplier = async (req, res) => {
     });
   }
 };
-
-
-// =========================================================
-// EXPORTS
-// =========================================================
 
 module.exports = {
   getSuppliers,

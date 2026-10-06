@@ -1,13 +1,6 @@
-const mongoose = require("mongoose");
+const { supabase } = require("../config/db");
 
-const Bill = require("../models/billModel");
-const CustomerLedger = require("../models/CustomerLedger");
-const Customer = require("../models/Customer");
-
-// ============================================================
 // CREATE BILL
-// ============================================================
-
 const createBill = async (req, res) => {
   try {
     const {
@@ -22,666 +15,336 @@ const createBill = async (req, res) => {
       note,
     } = req.body;
 
-    // ========================================================
-    // VALIDATION
-    // ========================================================
-
-    if (!beopari) {
+    if (!beopari || !billNo || !Array.isArray(lineItems) || lineItems.length === 0) {
       return res.status(400).json({
-        success: false,
-        message: "Beopari is required",
+        message: "Beopari, bill number and line items are required",
       });
     }
 
-    if (!billNo) {
-      return res.status(400).json({
-        success: false,
-        message: "Bill number is required",
-      });
+    const ledgerDate = date
+      ? String(date).slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    // Check duplicate bill number
+    const { data: existingBill, error: duplicateError } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("billNo", String(billNo))
+      .maybeSingle();
+
+    if (duplicateError) {
+      throw duplicateError;
     }
-
-    if (
-      !Array.isArray(lineItems) ||
-      lineItems.length === 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Line items are required",
-      });
-    }
-
-    // ========================================================
-    // DATE
-    // ========================================================
-
-    const ledgerDate =
-      date ||
-      new Date().toISOString().split("T")[0];
-
-    // ========================================================
-    // DUPLICATE BILL
-    // ========================================================
-
-    const existingBill = await Bill.findOne({
-      billNo: String(billNo),
-    });
 
     if (existingBill) {
-      return res.status(400).json({
-        success: false,
-        message: `Bill No ${billNo} already exists`,
+      return res.status(409).json({
+        message: "Bill number already exists",
       });
     }
 
-    // ========================================================
-    // CUSTOMER-WISE AMOUNT
-    // ========================================================
-
+    // Calculate each customer's bill amount
     const customerAmounts = {};
 
     for (const item of lineItems) {
-      // Support multiple possible frontend structures
       const customerId =
-        item?.customer?.id ||
-        item?.customer?._id ||
-        item?.customerId ||
-        item?.customer;
-
-      if (!customerId) {
-        return res.status(400).json({
-          success: false,
-          message: `Customer ID missing for item: ${
-            item?.item || "Unknown item"
-          }`,
-        });
-      }
-
-      if (
-        !mongoose.Types.ObjectId.isValid(
-          customerId
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid customer ID for item: ${
-            item?.item || "Unknown item"
-          }`,
-        });
-      }
-
-      const amount = Number(item?.amount || 0);
-
-      if (amount <= 0) {
-        continue;
-      }
-
-      if (!customerAmounts[customerId]) {
-        customerAmounts[customerId] = 0;
-      }
-
-      customerAmounts[customerId] += amount;
-    }
-
-    console.log(
-      "========================================"
-    );
-
-    console.log(
-      "CUSTOMER WISE BILL AMOUNTS:"
-    );
-
-    console.log(customerAmounts);
-
-    console.log(
-      "========================================"
-    );
-
-    // ========================================================
-    // CREATE BILL
-    // ========================================================
-
-    const bill = await Bill.create({
-      date: ledgerDate,
-
-      billNo: String(billNo),
-
-      copyNo: copyNo || "",
-
-      vehicleNo: vehicleNo || "",
-
-      beopari,
-
-      lineItems,
-
-      deductions: deductions || [],
-
-      totals: totals || {},
-
-      note: note || "",
-    });
-
-    console.log(
-      "BILL CREATED:",
-      bill._id
-    );
-
-    // ========================================================
-    // LEDGER RESULTS
-    // ========================================================
-
-    const ledgerResults = [];
-
-    // ========================================================
-    // CREATE SALE LEDGER FOR EACH CUSTOMER
-    // ========================================================
-
-    for (const customerId of Object.keys(
-      customerAmounts
-    )) {
-      try {
-        const billAmount = Number(
-          customerAmounts[customerId] || 0
-        );
-
-        // ----------------------------------------------------
-        // FIND CUSTOMER
-        // ----------------------------------------------------
-
-        const customer =
-          await Customer.findById(customerId);
-
-        if (!customer) {
-          throw new Error(
-            `Customer not found: ${customerId}`
-          );
-        }
-
-        // ----------------------------------------------------
-        // CUSTOMER INFORMATION
-        // ----------------------------------------------------
-
-        const customerCode =
-          customer.customerCode ||
-          customer.accountNo ||
-          customer.code ||
-          "";
-
-        const customerNameUrdu =
-          customer.customerNameUrdu ||
-          customer.nameUrdu ||
-          "";
-
-        const customerNameEnglish =
-          customer.customerNameEnglish ||
-          customer.nameEnglish ||
-          customer.name ||
-          "";
-
-        // ----------------------------------------------------
-        // GET LATEST LEDGER
-        // ----------------------------------------------------
-
-        const lastLedger =
-          await CustomerLedger.findOne({
-            customerId: customer._id,
-          }).sort({
-            date: -1,
-            createdAt: -1,
-          });
-
-        // ----------------------------------------------------
-        // PREVIOUS BALANCE
-        // ----------------------------------------------------
-
-        const previousBalance = lastLedger
-          ? Number(
-              lastLedger.remainingBalance || 0
-            )
-          : Number(
-              customer.openingBalance || 0
-            );
-
-        // ----------------------------------------------------
-        // NEW BALANCE
-        // ----------------------------------------------------
-
-        const remainingBalance =
-          previousBalance + billAmount;
-
-        // ----------------------------------------------------
-        // CREATE NEW SALE LEDGER
-        // IMPORTANT:
-        // Never update today's receipt.
-        // Always create a NEW ledger entry.
-        // ----------------------------------------------------
-
-        const newLedger =
-          await CustomerLedger.create({
-            customerId: customer._id,
-
-            customerCode,
-
-            customerNameUrdu,
-
-            customerNameEnglish,
-
-            date: ledgerDate,
-
-            type: "SALE",
-
-            receiptNo: "",
-
-            billId: bill._id,
-
-            billNo: String(
-              bill.billNo
-            ),
-
-            copyNo:
-              bill.copyNo || "",
-
-            vehicleNo:
-              bill.vehicleNo || "",
-
-            description:
-              `Sale Bill #${bill.billNo}`,
-
-            lineItems:
-              bill.lineItems || [],
-
-            deductions:
-              bill.deductions || [],
-
-            totals:
-              bill.totals || {},
-
-            billAmount,
-
-            previousBalance,
-
-            receivedAmount: 0,
-
-            remainingBalance,
-          });
-
-        console.log(
-          "CUSTOMER LEDGER CREATED:",
-          {
-            customerId:
-              customer._id,
-
-            billNo:
-              bill.billNo,
-
-            billAmount,
-
-            previousBalance,
-
-            remainingBalance,
-
-            ledgerId:
-              newLedger._id,
-          }
-        );
-
-        // ----------------------------------------------------
-        // RESULT
-        // ----------------------------------------------------
-
-        ledgerResults.push({
-          customerId:
-            customer._id,
-
-          customerCode,
-
-          customerName:
-            customerNameEnglish,
-
-          billAmount,
-
-          previousBalance,
-
-          remainingBalance,
-
-          ledgerId:
-            newLedger._id,
-
-          action: "created",
-        });
-      } catch (ledgerError) {
-        console.error(
-          "CUSTOMER LEDGER ERROR:",
-          ledgerError
-        );
-
-        // Delete bill because ledger failed
-        await Bill.findByIdAndDelete(
-          bill._id
-        );
-
-        return res.status(500).json({
-          success: false,
-          message:
-            "Bill was not saved because customer ledger could not be created",
-          error:
-            ledgerError.message,
-        });
+        item.customer?.id ||
+        item.customer?._id ||
+        item.customerId ||
+        item.customer;
+
+      const amount = Number(item.amount || 0);
+
+      if (customerId && amount > 0) {
+        customerAmounts[String(customerId)] =
+          (customerAmounts[String(customerId)] || 0) + amount;
       }
     }
 
-    // ========================================================
-    // RESPONSE
-    // ========================================================
+    // Save bill
+    const { data: bill, error: billError } = await supabase
+      .from("bills")
+      .insert([
+        {
+          date: ledgerDate,
+          billNo: String(billNo),
+          copyNo: copyNo || "",
+          vehicleNo: vehicleNo || "",
+          beopari,
+          lineItems,
+          deductions: deductions || {},
+          totals: totals || {},
+          note: note || "",
+        },
+      ])
+      .select()
+      .single();
 
-    return res.status(201).json({
-      success: true,
-
-      message:
-        "Bill created and customer ledger updated successfully",
-
-      data: {
-        bill,
-
-        ledgerDate,
-
-        customerAmounts,
-
-        ledgers:
-          ledgerResults,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "CREATE BILL ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-
-      message:
-        "Failed to create bill",
-
-      error:
-        error.message,
-    });
-  }
-};
-
-// ============================================================
-// GET ALL BILLS
-// ============================================================
-
-const getBills = async (req, res) => {
-  try {
-    const bills =
-      await Bill.find()
-        .sort({
-          createdAt: -1,
-        });
-
-    return res.status(200).json({
-      success: true,
-      count: bills.length,
-      data: bills,
-    });
-  } catch (error) {
-    console.error(
-      "GET BILLS ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to fetch bills",
-      error:
-        error.message,
-    });
-  }
-};
-
-// ============================================================
-// GET SINGLE BILL
-// ============================================================
-
-const getBillById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (
-      !mongoose.Types.ObjectId.isValid(id)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid bill ID",
-      });
+    if (billError) {
+      throw billError;
     }
 
-    const bill =
-      await Bill.findById(id);
+    const ledgers = [];
 
-    if (!bill) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Bill not found",
-      });
-    }
+    // Create SALE ledger entry for each customer
+    for (const [customerId, billAmount] of Object.entries(customerAmounts)) {
+      const { data: customer, error: customerError } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("id", customerId)
+        .maybeSingle();
 
-    return res.status(200).json({
-      success: true,
-      data: bill,
-    });
-  } catch (error) {
-    console.error(
-      "GET BILL ERROR:",
-      error
-    );
+      if (customerError) {
+        throw customerError;
+      }
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to fetch bill",
-      error:
-        error.message,
-    });
-  }
-};
+      if (!customer) {
+        throw new Error(`Customer not found: ${customerId}`);
+      }
 
-// ============================================================
-// GET CUSTOMER LEDGER
-// ============================================================
+      const { data: previousLedgers, error: ledgerFetchError } = await supabase
+        .from("customer_ledgers")
+        .select("remainingBalance,date,createdAt")
+        .eq("customerId", customerId)
+        .order("date", { ascending: false })
+        .order("createdAt", { ascending: false })
+        .limit(1);
 
-const getCustomerLedger = async (
-  req,
-  res
-) => {
-  try {
-    const { customerId } =
-      req.params;
+      if (ledgerFetchError) {
+        throw ledgerFetchError;
+      }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        customerId
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid customer ID",
-      });
-    }
+      const lastLedger = previousLedgers?.[0];
 
-    const customer =
-      await Customer.findById(
-        customerId
+      const previousBalance = Number(
+        lastLedger?.remainingBalance ?? customer.openingBalance ?? 0
       );
 
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Customer not found",
-      });
-    }
+      const remainingBalance = previousBalance + billAmount;
 
-    const ledger =
-      await CustomerLedger.find({
-        customerId:
-          customer._id,
-      }).sort({
-        date: 1,
-        createdAt: 1,
-      });
-
-    const openingBalance =
-      Number(
-        customer.openingBalance || 0
-      );
-
-    const lastLedger =
-      ledger.length > 0
-        ? ledger[
-            ledger.length - 1
-          ]
-        : null;
-
-    const remainingBalance =
-      lastLedger
-        ? Number(
-            lastLedger.remainingBalance ||
-              0
-          )
-        : openingBalance;
-
-    return res.status(200).json({
-      success: true,
-
-      customer: {
-        id:
-          customer._id,
-
+      const ledgerEntry = {
+        customerId,
         customerCode:
-          customer.customerCode ||
-          customer.accountNo ||
-          customer.code ||
-          "",
-
+          customer.customerCode || customer.accountNo || customer.code || "",
         customerNameUrdu:
-          customer.customerNameUrdu ||
-          customer.nameUrdu ||
-          "",
-
+          customer.customerNameUrdu || customer.nameUrdu || "",
         customerNameEnglish:
           customer.customerNameEnglish ||
           customer.nameEnglish ||
           customer.name ||
           "",
-
-        openingBalance,
-      },
-
-      ledger,
-
-      openingBalance,
-
-      previousBalance:
+        date: ledgerDate,
+        type: "SALE",
+        receiptNo: "",
+        billId: bill.id,
+        billNo: String(billNo),
+        copyNo: copyNo || "",
+        vehicleNo: vehicleNo || "",
+        description: `Sale Bill #${billNo}`,
+        lineItems,
+        deductions: deductions || {},
+        totals: totals || {},
+        billAmount,
+        previousBalance,
+        receivedAmount: 0,
         remainingBalance,
+      };
 
-      remainingBalance,
+      const { data: ledger, error: ledgerError } = await supabase
+        .from("customer_ledgers")
+        .insert([ledgerEntry])
+        .select()
+        .single();
+
+      if (ledgerError) {
+        throw ledgerError;
+      }
+
+      ledgers.push(ledger);
+    }
+
+    return res.status(201).json({
+      message: "Bill created successfully",
+      bill,
+      ledgerDate,
+      customerAmounts,
+      ledgers,
     });
   } catch (error) {
-    console.error(
-      "GET CUSTOMER LEDGER ERROR:",
-      error
-    );
+    console.error("Create bill error:", error.message);
 
     return res.status(500).json({
-      success: false,
-
-      message:
-        "Failed to fetch customer ledger",
-
-      error:
-        error.message,
+      message: "Failed to create bill",
+      error: error.message,
     });
   }
 };
 
-// ============================================================
-// DELETE BILL
-// ============================================================
-
-const deleteBill = async (
-  req,
-  res
-) => {
+// GET ALL BILLS
+const getBills = async (req, res) => {
   try {
-    const { id } =
-      req.params;
+    const { data, error } = await supabase
+      .from("bills")
+      .select("*")
+      .order("createdAt", { ascending: false });
 
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        id
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid bill ID",
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json({
+      count: data.length,
+      data,
+    });
+  } catch (error) {
+    console.error("Get bills error:", error.message);
+
+    return res.status(500).json({
+      message: "Failed to fetch bills",
+      error: error.message,
+    });
+  }
+};
+
+// GET BILL BY ID
+const getBillById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from("bills")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        message: "Bill not found",
       });
     }
 
-    const bill =
-      await Bill.findById(id);
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error("Get bill error:", error.message);
+
+    return res.status(500).json({
+      message: "Failed to fetch bill",
+      error: error.message,
+    });
+  }
+};
+
+// GET CUSTOMER LEDGER
+const getCustomerLedger = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const { data: customer, error: customerError } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("id", customerId)
+      .maybeSingle();
+
+    if (customerError) {
+      throw customerError;
+    }
+
+    if (!customer) {
+      return res.status(404).json({
+        message: "Customer not found",
+      });
+    }
+
+    const { data: ledger, error: ledgerError } = await supabase
+      .from("customer_ledgers")
+      .select("*")
+      .eq("customerId", customerId)
+      .order("date", { ascending: true })
+      .order("createdAt", { ascending: true });
+
+    if (ledgerError) {
+      throw ledgerError;
+    }
+
+    const openingBalance = Number(customer.openingBalance || 0);
+    const lastLedger = ledger?.[ledger.length - 1];
+
+    return res.status(200).json({
+      customer,
+      ledger: ledger || [],
+      openingBalance,
+      previousBalance: Number(
+        lastLedger?.previousBalance ?? openingBalance
+      ),
+      remainingBalance: Number(
+        lastLedger?.remainingBalance ?? openingBalance
+      ),
+    });
+  } catch (error) {
+    console.error("Get customer ledger error:", error.message);
+
+    return res.status(500).json({
+      message: "Failed to fetch customer ledger",
+      error: error.message,
+    });
+  }
+};
+
+// DELETE BILL
+const deleteBill = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: bill, error: findError } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (findError) {
+      throw findError;
+    }
 
     if (!bill) {
       return res.status(404).json({
-        success: false,
-        message:
-          "Bill not found",
+        message: "Bill not found",
       });
     }
 
-    // Delete all SALE ledger
-    // entries belonging to this bill
-    await CustomerLedger.deleteMany({
-      billId:
-        bill._id,
-    });
+    // Delete associated ledger entries first
+    const { error: ledgerError } = await supabase
+      .from("customer_ledgers")
+      .delete()
+      .eq("billId", id);
 
-    await Bill.findByIdAndDelete(
-      id
-    );
+    if (ledgerError) {
+      throw ledgerError;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("bills")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
 
     return res.status(200).json({
-      success: true,
-      message:
-        "Bill and related customer ledger deleted successfully",
+      message: "Bill and associated ledger entries deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "DELETE BILL ERROR:",
-      error
-    );
+    console.error("Delete bill error:", error.message);
 
     return res.status(500).json({
-      success: false,
-
-      message:
-        "Failed to delete bill",
-
-      error:
-        error.message,
+      message: "Failed to delete bill",
+      error: error.message,
     });
   }
 };
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = {
   createBill,

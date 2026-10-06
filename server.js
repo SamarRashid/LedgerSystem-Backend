@@ -1,24 +1,11 @@
-// =========================================================
-// ENVIRONMENT VARIABLES
-// =========================================================
-
 require("dotenv").config();
-
-
-// =========================================================
-// IMPORTS
-// =========================================================
 
 const express = require("express");
 const cors = require("cors");
 
 const { connectDB } = require("./config/db");
 
-
-// =========================================================
-// ROUTES
-// =========================================================
-
+// Routes
 const userRoutes = require("./routes/userRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -33,116 +20,85 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const customerLedgerRoutes = require("./routes/customerLedgerRoutes");
 const commissionRoutes = require("./routes/commissionRoutes");
 
-
-// =========================================================
-// APP
-// =========================================================
-
 const app = express();
 
-
-// =========================================================
-// DATABASE
-// =========================================================
-
-connectDB();
-
-
-// =========================================================
-// MIDDLEWARE
-// =========================================================
-
+// Middleware
 app.use(
-  cors({
-    origin: [
-      "http://localhost:3000",
-      "https://ledger-system-beige.vercel.app",
-    ],
-    credentials: true,
-  })
+cors({
+origin: [
+"http://localhost:3000",
+"https://ledger-system-beige.vercel.app",
+],
+credentials: true,
+})
 );
 
 app.use(express.json());
-
 app.use(express.urlencoded({ extended: true }));
 
-
-// =========================================================
-// TEST ROUTE
-// =========================================================
-
+// Test route
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Ledger System API is running",
-  });
+res.json({
+success: true,
+message: "Ledger System API is running",
+});
 });
 
-
-// =========================================================
-// API ROUTES
-// =========================================================
-
+// API routes
 app.use("/api/users", userRoutes);
-
 app.use("/api/customers", customerRoutes);
-
 app.use("/api/suppliers", supplierRoutes);
-
 app.use("/api/products", productRoutes);
-
 app.use("/api/areas", areaRoutes);
-
 app.use("/api/bills", billRoutes);
-
 app.use("/api/expenses", expenseRoutes);
-
 app.use("/api/receipts", receiptRoutes);
-
 app.use("/api/payments", paymentRoutes);
-
 app.use("/api/customerledgers", customerLedgerRoutes);
-
 app.use("/api/commissions", commissionRoutes);
-
 app.use("/api/settings", settingsRoutes);
-
 app.use("/api/auth", authRoutes);
 
-
-// =========================================================
-// 404 HANDLER
-// =========================================================
-
+// 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-  });
+res.status(404).json({
+success: false,
+message: `Route not found: ${req.method} ${req.originalUrl}`,
+});
 });
 
-
-// =========================================================
-// ERROR HANDLER
-// =========================================================
-
+// Error handler
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
+console.error("Server error:", err);
 
-  res.status(500).json({
-    success: false,
-    message: "Internal server error",
-    error: err.message,
-  });
+if (res.headersSent) {
+return next(err);
+}
+
+res.status(err.status || 500).json({
+success: false,
+message:
+process.env.NODE_ENV === "production"
+? "Internal server error"
+: err.message,
+});
 });
 
-
-// =========================================================
-// SERVER
-// =========================================================
-
+// Start server after database check
 const PORT = process.env.PORT || 5000;
 
+async function startServer() {
+try {
+await connectDB();
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
+
+} catch (error) {
+console.error("Failed to start server:", error.message);
+process.exit(1);
+}
+}
+
+startServer();

@@ -3,7 +3,7 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl) {
   console.error("❌ SUPABASE_URL is missing in .env");
@@ -32,10 +32,10 @@ const connectDB = async () => {
     }
 
     console.log("Supabase connected successfully ✅");
-
   } catch (error) {
     console.error(
-      `Supabase connection failed ❌: ${error.message}`
+      "Supabase connection failed ❌:",
+      error.message
     );
 
     process.exit(1);

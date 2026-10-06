@@ -1,8 +1,8 @@
 const express = require("express");
 
 const {
-  getProfile,
-  updateProfile,
+getProfile,
+updateProfile,
 } = require("../controllers/settingsController");
 
 const router = express.Router();

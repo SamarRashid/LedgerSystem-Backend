@@ -3,9 +3,9 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  createReceipt,
-  getAllReceipts,
-  getCustomerLedger,
+createReceipt,
+getAllReceipts,
+getCustomerLedger,
 } = require("../controllers/receiptController");
 
 // GET all receipts

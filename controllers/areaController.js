@@ -1,42 +1,47 @@
-const Area = require("../models/Area");
 
-// @desc    Get all areas
-// @route   GET /api/areas
-// @access  Public
+const { supabase } = require("../config/db");
+
+// Format database row for the frontend
+const formatArea = (a) => ({
+  id: a.id,
+  code: a.code,
+  postalCode: a.postalCode ?? "",
+  nameEn: a.nameEn ?? "",
+  nameUr: a.nameUr ?? "",
+  city: a.city ?? "",
+  route: a.route ?? "",
+  status: a.status ?? "Active",
+  description: a.description ?? "",
+});
+
+// GET /api/areas
 const getAreas = async (req, res) => {
   try {
-    const areas = await Area.find().sort({ createdAt: -1 });
-    const formattedAreas = areas.map(a => ({
-      id: a._id,
-      code: a.code,
-      postalCode: a.postalCode,
-      nameEn: a.nameEn,
-      nameUr: a.nameUr,
-      city: a.city,
-      route: a.route,
-      status: a.status,
-      description: a.description
-    }));
-    res.status(200).json({ success: true, data: formattedAreas });
+    const { data, error } = await supabase
+      .from("areas")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return res.status(200).json({
+      success: true,
+      data: (data || []).map(formatArea),
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Get areas error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
-// @desc    Create an area
-// @route   POST /api/areas
-// @access  Public
+// POST /api/areas
 const createArea = async (req, res) => {
   try {
-    const { code, postalCode, nameEn, nameUr, city, route, status, description } = req.body;
-    
-    // Check if code exists
-    const areaExists = await Area.findOne({ code });
-    if (areaExists) {
-      return res.status(400).json({ success: false, message: "Area code already exists" });
-    }
-
-    const a = await Area.create({
+    const {
       code,
       postalCode,
       nameEn,
@@ -44,77 +49,169 @@ const createArea = async (req, res) => {
       city,
       route,
       status,
-      description
+      description,
+    } = req.body;
+
+    if (!code || !nameEn || !nameUr) {
+      return res.status(400).json({
+        success: false,
+        message: "Code, English name and Urdu name are required",
+      });
+    }
+
+    const { data: existingArea, error: checkError } = await supabase
+      .from("areas")
+      .select("id")
+      .eq("code", code)
+      .maybeSingle();
+
+    if (checkError) throw checkError;
+
+    if (existingArea) {
+      return res.status(409).json({
+        success: false,
+        message: "Area code already exists",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("areas")
+      .insert({
+        code,
+        postalCode: postalCode || null,
+        nameEn,
+        nameUr,
+        city: city || null,
+        route: route || null,
+        status: status || "Active",
+        description: description || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({
+      success: true,
+      data: formatArea(data),
     });
-
-    const area = {
-      id: a._id,
-      code: a.code,
-      postalCode: a.postalCode,
-      nameEn: a.nameEn,
-      nameUr: a.nameUr,
-      city: a.city,
-      route: a.route,
-      status: a.status,
-      description: a.description
-    };
-
-    res.status(201).json({ success: true, data: area });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Create area error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
-// @desc    Update an area
-// @route   PUT /api/areas/:id
-// @access  Public
+// PUT /api/areas/:id
 const updateArea = async (req, res) => {
   try {
-    const area = await Area.findById(req.params.id);
-    
-    if (!area) {
-      return res.status(404).json({ success: false, message: "Area not found" });
+    const allowedFields = [
+      "code",
+      "postalCode",
+      "nameEn",
+      "nameUr",
+      "city",
+      "route",
+      "status",
+      "description",
+    ];
+
+    const updates = {};
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
     }
 
-    const a = await Area.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields provided for update",
+      });
+    }
 
-    const updatedArea = {
-      id: a._id,
-      code: a.code,
-      postalCode: a.postalCode,
-      nameEn: a.nameEn,
-      nameUr: a.nameUr,
-      city: a.city,
-      route: a.route,
-      status: a.status,
-      description: a.description
-    };
+    if (updates.code) {
+      const { data: duplicate, error: duplicateError } = await supabase
+        .from("areas")
+        .select("id")
+        .eq("code", updates.code)
+        .neq("id", req.params.id)
+        .maybeSingle();
 
-    res.status(200).json({ success: true, data: updatedArea });
+      if (duplicateError) throw duplicateError;
+
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: "Area code already exists",
+        });
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("areas")
+      .update(updates)
+      .eq("id", req.params.id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: "Area not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: formatArea(data),
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Update area error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
-// @desc    Delete an area
-// @route   DELETE /api/areas/:id
-// @access  Public
+// DELETE /api/areas/:id
 const deleteArea = async (req, res) => {
   try {
-    const area = await Area.findById(req.params.id);
+    const { data, error } = await supabase
+      .from("areas")
+      .delete()
+      .eq("id", req.params.id)
+      .select("id")
+      .maybeSingle();
 
-    if (!area) {
-      return res.status(404).json({ success: false, message: "Area not found" });
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: "Area not found",
+      });
     }
 
-    await area.deleteOne();
-    res.status(200).json({ success: true, message: "Area removed" });
+    return res.status(200).json({
+      success: true,
+      message: "Area removed successfully",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Delete area error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -122,5 +219,5 @@ module.exports = {
   getAreas,
   createArea,
   updateArea,
-  deleteArea
+  deleteArea,
 };
