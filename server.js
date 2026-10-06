@@ -55,6 +55,7 @@ app.use("/api/expenses", expenseRoutes);
 app.use("/api/receipts", receiptRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/customerledgers", customerLedgerRoutes);
+app.use("/api/customer-ledger", customerLedgerRoutes);
 app.use("/api/commissions", commissionRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/auth", authRoutes);
